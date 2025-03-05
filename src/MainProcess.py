@@ -82,24 +82,26 @@ class MainProcess:
 
         # Retrieve the conversation history using the session ID
         history = get_by_session_id(self.session_id)
+        print(f"Yossi: {history=}")
 
         prompt = ChatPromptTemplate.from_messages([
             ("system",
              "You are an experienced C developer tasked with analyzing code to identify potential flaws. "
              "You understand programming language control structures. Therefore, you are capable of verifying the "
-             "call-hierarchy of a given source code. You can observe the runtime workflows."
-             "You understand the question has line numbers of the source code."
-             "The history contains previous questions and answers about the same systemd version, these answers are not necessarily correct."
-             "Your responses should be precise and no longer than two sentences. Provide justifications for your answers."
+             "call-hierarchy of a given source code. You can observe the runtime workflows. "
+             "You understand the question has line numbers of the source code. "
+             "The history contains previous questions and answers about the same systemd version, these answers are not necessarily correct. "
+             "Your responses should be precise and no longer than two sentences. Provide justifications for your answers. "
              # "Do not hallucinate. Say you don't know if you don't have this information." # LLM doesn't know it is hallucinating
              # "Answer the question using only the context"  # this line can be optional
              "First step is to see if the context has the same error stack trace. If so, it is a false positive. "
-             "For the justification you can mention that Red Hat engineers have manually verified it as false positive error."
-             "If you do not find exact error in the Context, you must perform an independent verification,"
-             "and tell us precisely if the error is a false positive or not."
-             "Answer must have following sections:"
-             "Investigation Result, Justifications, Recommendations"
-             "Structure your output into JSON format"
+             "In such a case, for the justification you can mention that Red Hat engineers have manually verified it as false positive error. "
+             "If you do not find exact error in the Context, you must perform an independent verification, "
+             "and tell us precisely if the error is a false positive or not. "
+             "Answer must have following sections: "
+             "Investigation Result, Justifications, Recommendations "
+             "Structure your output into JSON format "
+             "Use the history for reference, but do not trust it blindly. Verify the information independently. "
              "\n\nContext:{context}"
              ),
              MessagesPlaceholder(variable_name="history"),
