@@ -3,18 +3,10 @@ import yaml
 
 def print_config(config):
     print("".center(80, '-'))
-    print("LLM_URL =", config["LLM_URL"])
-    print("LLM_API_KEY = ********")
-    print("LLM_MODEL_NAME =", config["LLM_MODEL_NAME"])
-    print("OUTPUT_FILE_PATH =", config["OUTPUT_FILE_PATH"])
-    print("GIT_REPO_PATH =", config["GIT_REPO_PATH"])
-    print("EMBEDDINGS_LLM_MODEL_NAME =", config["EMBEDDINGS_LLM_MODEL_NAME"])
-    print("REPORT_FILE_PATH =", config["REPORT_FILE_PATH"])
-    print("KNOWN_FALSE_POSITIVE_FILE_PATH =", config["KNOWN_FALSE_POSITIVE_FILE_PATH"])
-    print("HUMAN_VERIFIED_FILE_PATH =", config["HUMAN_VERIFIED_FILE_PATH"])
-    print("USE_KNOWN_FALSE_POSITIVE_FILE =", config["USE_KNOWN_FALSE_POSITIVE_FILE"])
-    print("CALCULATE_METRICS =", config["CALCULATE_METRICS"])
-    print("DOWNLOAD_GIT_REPO =", config["DOWNLOAD_GIT_REPO"])
+    print("LLM_API_KEY= ********")
+    for key, value in config.items():
+        if key != "LLM_API_KEY":
+            print(f"{key} = {value}")
     print("".center(80, '-'))
 
 def load_config():
@@ -59,6 +51,13 @@ def validate_configurations(config):
     llm_api_key = os.environ.get("LLM_API_KEY")
     if not llm_api_key:
         raise ValueError(f"Environment variable 'LLM_API_KEY' is not set or is empty.")
+    
+    # Validate critique config if RUN_WITH_CRITIQUE is True
+    if config.get("RUN_WITH_CRITIQUE"):
+        if not config.get("CRITIQUE_LLM_URL") or not config.get("CRITIQUE_LLM_MODEL_NAME"):
+            raise ValueError(
+                "Both 'CRITIQUE_LLM_MODEL_NAME' and 'CRITIQUE_LLM_URL' must be set when 'RUN_WITH_CRITIQUE' is True."
+            )
     
     print("All required environment variables and files are valid and accessible.\n")
 
