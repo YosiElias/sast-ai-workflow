@@ -1,15 +1,20 @@
 import os
+from pprint import pprint
+
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_openai import OpenAI
+from Utils.config_utils import load_config
 from Utils.system_utils import get_device
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
-from Utils.file_utils import read_answer_template_file
+from Utils.file_utils import load_json_with_placeholders, read_answer_template_file
 
+config = load_config()
+NUMBER_OF_RETRIEVED_KNOWN_ISSUE = config["NUMBER_OF_RETRIEVED_KNOWN_ISSUE"]
 
 class LLMService:
 
@@ -22,6 +27,7 @@ class LLMService:
         self._main_llm = None
         self._embedding_llm = None
         self.vector_db = None
+        self.knonw_issues_vector_db = None
 
     @property
     def main_llm(self):
@@ -53,43 +59,55 @@ class LLMService:
             self._embedding_llm = HuggingFaceEmbeddings(
                 model_name=self.embedding_llm_model_name,
                 model_kwargs={'device': device},
-                encode_kwargs={'normalize_embeddings': False}
+                encode_kwargs={'normalize_embeddings': False},
+                show_progress=True
             )
         return self._embedding_llm
 
-    def filter_known_error(self, database, user_input):
+    def filter_known_error(self, database, user_input, issue):
 
         prompt = ChatPromptTemplate.from_messages([
             ("system",
-             "You are an expert in identifying similar error stack traces. "
-             "Inside the context, you are given existing set of error traces."
-             "Look very precisely into the context and tell us if you find similar error trace."
-             "Error traces should have exact number of lines. Same method names and order of method calls "
-             "must be identical."
-             "Answer the question using only the context."
-             "Generate a answer response template provided. No additional text outside the "
-             "answer template."
-             "\nAnswer response template:{answer_template}"
-             "\n\nContext:{context}"
-             ),
+            "You are an expert in identifying similar error stack traces. "
+            "The context contains a list of issues that have been classified as false positive by RedHat engineers. "
+            "Each issue in the list includes two key elements: "
+            "1. An error trace (called 'Known False Positive'). "
+            "2. A reason for its classification as a false positive (called 'Reason Marked as False Positive'). "
+            "When comparing issues, you may ignore differences in line numbers and systemd version. "
+            "However, the error trace in the query must exactly match the error trace in the context, "
+            "including the same method names and the same order of method calls. "
+            "Your task is to carefully analyze the context and determine if there is an error trace "
+            "in the context that matches the error trace in the query. "
+            "Answer the question using only the provided context. "
+            "Your response must strictly follow the provided answer response template. "
+            "Do not include any additional text outside the answer template. "
+            "\nAnswer response template:{answer_template}"
+            "\n\nContext:{context}"
+            ),
             ("user", "{question}")
         ])
-        retriever = database.as_retriever()
+        retriever = database.as_retriever(search_kwargs={"k": NUMBER_OF_RETRIEVED_KNOWN_ISSUE, 'filter': {'issue_type': issue.issue_name}})
         resp = retriever.invoke(user_input)
-        context_str = "".join(doc.page_content for doc in resp)
+        context_list = self._format_context_from_response(resp)
+        print(f"[issue-ID - {issue.id}] Found This context:")
+        pprint(context_list, width=100)
 
         template_path = os.path.join(os.path.dirname(__file__), "templates", "known_issue_resp.json")
         answer_template = read_answer_template_file(template_path)
         
         chain1 = (
                 {
-                    "context": RunnableLambda(lambda _: context_str),
+                    "context": RunnableLambda(lambda _: context_list),
                     "answer_template": RunnableLambda(lambda _: answer_template),
                     "question": RunnablePassthrough()
                 }
                 | prompt
         )
         actual_prompt = chain1.invoke(user_input)
+        if not context_list:
+            print(f"Not find any relevant context for issue id {issue.id}")
+            unknown_issue_template_path = os.path.join(os.path.dirname(__file__), "templates", "unknown_issue_resp.json")
+            return actual_prompt.to_string(), load_json_with_placeholders(unknown_issue_template_path, {"{ID}": issue.id, "{TYPE}": issue.issue_name})
         # print(f"Filtering prompt:   {actual_prompt.to_string()}")
         chain2 = (
                 chain1
@@ -97,6 +115,14 @@ class LLMService:
                 | StrOutputParser()
         )
         return actual_prompt.to_string(), chain2.invoke(user_input)
+
+    def _format_context_from_response(self, resp):
+        context_list = []
+        for doc in resp:
+            context_list.append({"Known False Positive":doc.page_content, 
+                                 "Reason Marked as False Positive":doc.metadata['reason_of_false_positive']
+                                 })
+        return context_list
 
     def final_judge(self, database, user_input):
 
@@ -142,11 +168,38 @@ class LLMService:
 
 
     def create_vdb(self, text_data):
-        self.embedding_llm.embed_documents(text_data)
         self.vector_db = FAISS.from_texts(text_data, self.embedding_llm)
-        # self.vector_db.add_texts(text_data)
         return self.vector_db
 
+    def create_vdb_for_knonw_issues(self, text_data):
+        metadata_list, error_trace_list = self._process_knonw_issues(text_data)
+        self.knonw_issues_vector_db = FAISS.from_texts(texts=error_trace_list, embedding=self.embedding_llm, metadatas=metadata_list)
+        return self.knonw_issues_vector_db
+    
+    def _process_knonw_issues(self, known_issues_list):
+        """
+        Returns:
+            tuple: A tuple containing:
+                - metadata_list (list[dict]): List of metadata dictionaries.
+                - error_trace_list (list[str]): List of known issues without the last line.
+        """
+        metadata_list = []
+        error_trace_list = []
+        for item in known_issues_list:
+            try:
+                lines = item.split("\n")            
+                # Extract the last line as `reason_of_false_positive`
+                reason_of_false_positive = lines[-1] if lines else ""
+                # Extract the issue type (next word after "Error:")
+                issue_type = lines[0].split("Error:")[1].strip().split()[0]
+                metadata_list.append({
+                    "reason_of_false_positive": reason_of_false_positive,
+                    "issue_type": issue_type
+                })
+                # Add the item without the last line
+                error_trace_list.append("\n".join(lines[:-1]))
+            except Exception as e:
+                print(f"Error occurred during process this known issue: {item}\nError: {e}")
+                raise e
 
-
-
+        return metadata_list, error_trace_list

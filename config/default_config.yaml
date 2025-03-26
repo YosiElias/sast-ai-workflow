@@ -22,4 +22,4 @@ CHUNK_SEPARATORS:
   - ","
   - " "
   - ""
-
+NUMBER_OF_RETRIEVED_KNOWN_ISSUE: 2

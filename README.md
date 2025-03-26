@@ -110,6 +110,7 @@ The project supports configuration via a YAML file located in the `config/` fold
 | CHUNK_SIZE                      | 500                                         | Maximum size for each text chunk.                                                                                     |
 | CHUNK_OVERLAP                   | 0                                           | Number of overlapping characters between consecutive chunks.                                                          |
 | CHUNK_SEPARATORS                | ["\n\n", "\n", ".", ";", ",", " ", ""]      | Ordered list of separators to use when splitting text into chunks.                                                    |
+| NUMBER_OF_RETRIEVED_KNOWN_ISSUE | 2 | Number of Documents to return from known issues DB. |
 
 
 > **Note:**  
