@@ -1,3 +1,4 @@
+
 exclude: ^src/LLMService\.py$
 repos:
   - repo: https://github.com/psf/black
@@ -19,3 +20,5 @@ repos:
       - id: flake8
         args: ["--max-line-length=100", "--extend-ignore=E203,W503"]
         files: ^src/
+
+        
