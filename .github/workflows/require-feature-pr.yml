@@ -1,0 +1,31 @@
+name: "Require matching Dummy‑AIQ PR"
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [ dummy-main ]
+
+jobs:
+  check-feature-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for matching PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "all",
+              base: "dummy-aiq",
+            });
+            const match = prs.find(p => p.title === title);
+            if (!match) {
+              core.setFailed(
+                `Missing companion PR into 'dummy-aiq' with title "${title}".`
+              );
+            }
+
