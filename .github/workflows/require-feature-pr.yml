@@ -10,6 +10,11 @@ jobs:
     if: github.event.pull_request.base.ref == 'dummy-main'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip on non-main PRs
+        if: ${{ github.event.pull_request.base.ref != 'main' }}
+        run: |
+          echo "Skipping companion‑PR check because this PR is targeting '${{ github.event.pull_request.base.ref }}', not 'main'."
+
       - name: Check for matching PR
         uses: actions/github-script@v7
         with:
