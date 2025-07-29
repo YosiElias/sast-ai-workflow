@@ -2,6 +2,8 @@ name: "Require matching Dummy‑AIQ PR"
 
 on:
   pull_request:
+    branches:
+      - dummy-main  
 
 
 jobs:
