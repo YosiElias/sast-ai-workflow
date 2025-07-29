@@ -8,6 +8,7 @@ on:
 
 jobs:
   check-feature-pr:
+    if: github.event.pull_request.base.ref == 'dummy-main'
     runs-on: ubuntu-latest
     steps:
       - name: Check for matching PR
