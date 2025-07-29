@@ -10,6 +10,8 @@ from Utils.file_utils import read_all_source_code_files
 logger = logging.getLogger(__name__)
 
 
+
+
 def generate_code_embeddings(llm_service):
     if os.path.exists("./../faiss_index/index.faiss"):
         logger.info("Loading source code embeddings from file index")
