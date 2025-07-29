@@ -1,58 +1,40 @@
-name: "Require matching Dummy‑AIQ PR"
-
 on:
   pull_request:
+    # still triggers on _any_ PR event, but we’ll guard below
     branches:
-      - dummy-main    # only trigger on PRs targeting dummy-main
-    # omitting `types:` means “all pull_request events”
+      - dummy-main
 
 jobs:
   check-feature-pr:
     runs-on: ubuntu-latest
+
+    # ← job‑level guard: only run the job if the PR is targeting dummy‑main
+    if: ${{ github.event.pull_request.base.ref == 'dummy-main' }}
+
     steps:
-
-      # 1) Skip step for non-dummy-main targets
-      - name: Skip on non-dummy-main PRs
-        if: ${{ github.event.pull_request.base.ref != 'dummy-main' }}
+      - name: Log PR info
         run: |
-          echo "👉 Skipping companion‑PR check"
-          echo "   • PR base branch: '${{ github.event.pull_request.base.ref }}' (not 'dummy-main')"
+          echo "✅ Running companion‑PR check for PR #${{ github.event.pull_request.number }}"
+          echo "   • Base branch: ${{ github.event.pull_request.base.ref }}"
+          echo "   • Head branch: ${{ github.event.pull_request.head.ref }}"
 
-      # 2) Main check step for dummy-main
       - name: Check for matching Dummy‑AIQ PR
-        if: ${{ github.event.pull_request.base.ref == 'dummy-main' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // --- Log incoming PR info ---
-            const pr        = context.payload.pull_request;
-            console.log(`🔍 Running companion‑PR check for PR #${pr.number}`);
-            console.log(`   • Base branch: ${pr.base.ref}`);
-            console.log(`   • Head branch: ${pr.head.ref}`);
-            console.log(`   • Title:       "${pr.title}"`);
-
-            // --- Fetch companion PRs on dummy-aiq ---
-            const owner   = context.repo.owner;
-            const repo    = context.repo.repo;
-            const headRef = pr.head.ref;
-            console.log(`   → Querying PRs where base='dummy-aiq' and head='${owner}:${headRef}'`);
+            const pr      = context.payload.pull_request;
+            console.log(`🔍 Looking for companion PR into 'dummy-aiq' from '${pr.head.ref}'`);
             const { data: companions } = await github.rest.pulls.list({
-              owner,
-              repo,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               state: "all",
               base: "dummy-aiq",
-              head: `${owner}:${headRef}`,
+              head: `${context.repo.owner}:${pr.head.ref}`,
             });
-
             console.log(`   • Found ${companions.length} companion PR(s)`);
-
-            // --- Evaluate result ---
-            if (companions.length === 0) {
-              core.setFailed(
-                `❌ No companion PR into 'dummy-aiq' from branch '${headRef}'.`
-              );
+            if (!companions.length) {
+              core.setFailed(`❌ No companion PR into 'dummy-aiq' from branch '${pr.head.ref}'.`);
             } else {
-              const match = companions[0];
-              console.log(`✅ Companion PR #${match.number} found: ${match.html_url}`);
+              console.log(`✅ Companion PR #${companions[0].number} found: ${companions[0].html_url}`);
             }
