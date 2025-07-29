@@ -5,7 +5,6 @@ on:
     branches:
       - dummy-main  
 
-
 jobs:
   check-feature-pr:
     if: github.event.pull_request.base.ref == 'dummy-main'
@@ -17,17 +16,21 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr = context.payload.pull_request;
-            const title = pr.title;
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "all",
-              base: "dummy-aiq",
+            const headBranch = pr.head.ref;      // e.g. "feature/awesome-change"
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            
+            const { data: companionPRs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: "all",                     // or "open" if you only care about active ones
+              base: "aiq-workflow-migration",   // feature branch
+              head: `${owner}:${headBranch}`,   // exactly that same branch in your fork/org
             });
-            const match = prs.find(p => p.title === title);
-            if (!match) {
+            
+            if (companionPRs.length === 0) {
               core.setFailed(
-                `Missing companion PR into 'dummy-aiq' with title "${title}".`
+                `No companion PR into 'aiq-workflow-migration' from branch '${headBranch}'.`
               );
             }
-
+        
