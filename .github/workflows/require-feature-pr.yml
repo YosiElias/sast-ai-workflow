@@ -3,7 +3,8 @@ name: "Require matching Dummy‑AIQ PR"
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
-    branches: [ dummy-main ]
+    branches:
+      - dummy-main
 
 jobs:
   check-feature-pr:
